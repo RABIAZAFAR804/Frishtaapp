@@ -43,14 +43,14 @@ export const RescueSystemManagerModal: React.FC<RescueSystemManagerModalProps> =
         soundEffects.playHapticClick();
         setBroadcastLog((prev) => [
           ...prev,
-          `✓ [${hq.division}] ${hq.name} - ACKNOWLEDGED (${hq.pingLatency})`,
+          `✓ [${hq.division}] ${hq.name} - AVAILABILITY CHECKED (${hq.pingLatency})`,
         ]);
         if (index === RESCUE_1122_HEADQUARTERS.length - 1) {
           setTimeout(() => {
             soundEffects.playSuccessDispatch();
             setBroadcastLog((prev) => [
               ...prev,
-              `🏥 [TRAUMA BAY] ${selectedHospital.name} - PRE-ALERT DISPATCHED TO ${selectedHospital.assigned1122Station}`,
+              `🚑 [1-TEAM LOCK] ${selectedHospital.assigned1122Station} ASSIGNED TO ${selectedHospital.name} • OTHER TEAMS STOOD DOWN`,
             ]);
             setIsSimulatingBroadcast(false);
           }, 400);
@@ -257,7 +257,7 @@ export const RescueSystemManagerModal: React.FC<RescueSystemManagerModalProps> =
                   Replace or Update Secondary Rescue Fleet
                 </h4>
                 <p className="text-[11px] text-[#dfe2f1]/60">
-                  Select which partner service receives backup emergency alerts alongside Rescue 1122.
+                  Fallback partner service used only when the primary Rescue 1122 unit is busy or farther away (1-team lock still applies).
                 </p>
               </div>
 
@@ -335,10 +335,10 @@ export const RescueSystemManagerModal: React.FC<RescueSystemManagerModalProps> =
                   </div>
                   <div>
                     <span className="font-display text-xs font-bold text-white block">
-                      Forward Message to ALL 1122 Headquarters
+                      Control Room Coordination Across All 1122 Desks
                     </span>
                     <span className="text-[10px] text-[#ffdad6]/80">
-                      Dispatches telemetry to Provincial, District &amp; Zonal PSAP Desks
+                      Checks all desks&apos; availability &amp; locks case to 1 nearest suitable team
                     </span>
                   </div>
                 </div>
@@ -411,8 +411,8 @@ export const RescueSystemManagerModal: React.FC<RescueSystemManagerModalProps> =
                   </span>
                   <span>
                     {isSimulatingBroadcast
-                      ? 'Broadcasting to 1122 Headquarters...'
-                      : 'Test Forward CAD to All 1122 Headquarters'}
+                      ? 'Checking Desk Availability...'
+                      : 'Test Control Room Coordination (1-Team Lock)'}
                   </span>
                 </button>
 

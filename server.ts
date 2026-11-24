@@ -497,7 +497,7 @@ async function fetchGooglePlacesNearby(
 // In-memory crash & alert event log
 interface CrashLogEntry {
   id: string;
-  type: 'CRASH_REPORT' | 'CRASH_CANCEL' | 'PREDICTIVE_ALERT';
+  type: 'CRASH_REPORT' | 'CRASH_CANCEL' | 'PREDICTIVE_ALERT' | 'TEAM_ARRIVAL';
   lat: number;
   lng: number;
   gForce?: number;
@@ -507,6 +507,201 @@ interface CrashLogEntry {
 }
 
 const crashLogs: CrashLogEntry[] = [];
+
+// ---------------------------------------------------------------------------
+// Smart Dispatch & Team Coordination System (Single-Team Lock Engine)
+// ---------------------------------------------------------------------------
+const STAND_DOWN_MESSAGE =
+  'This emergency has already been assigned to another team. No additional response is required at this time.';
+
+interface BaseRescueTeam {
+  id: string;
+  name: string;
+  agency: string;
+  controlRoom: string;
+  unitType: string;
+  capabilities: string[];
+  phone: string;
+  offsetLat: number;
+  offsetLng: number;
+  speedKmh: number;
+  traumaPriority: number; // Higher = better equipped for severe trauma
+}
+
+const BASE_RESCUE_TEAMS: BaseRescueTeam[] = [
+  {
+    id: 'team-1122-alpha',
+    name: 'Rescue 1122 — Alpha Trauma Ambulance #04',
+    agency: 'Rescue 1122',
+    controlRoom: 'Rescue 1122 Central Control Room',
+    unitType: 'ALS Trauma Ambulance',
+    capabilities: ['ACLS Defibrillator', 'Spine Board', 'Oxygen & IV', 'Trauma Paramedics'],
+    phone: '1122',
+    offsetLat: 0.0068,
+    offsetLng: -0.0052,
+    speedKmh: 44,
+    traumaPriority: 98,
+  },
+  {
+    id: 'team-1122-bike',
+    name: 'Rescue 1122 — Rapid Biker Medic #11',
+    agency: 'Rescue 1122',
+    controlRoom: 'Rescue 1122 Central Control Room',
+    unitType: 'Rapid First-Aid Motorbike',
+    capabilities: ['Traffic Bypasser', 'Tourniquet & Bleed Kit', 'C-Spine Collar'],
+    phone: '1122',
+    offsetLat: -0.0038,
+    offsetLng: 0.0031,
+    speedKmh: 52,
+    traumaPriority: 84,
+  },
+  {
+    id: 'team-edhi-115',
+    name: 'Edhi Foundation — Emergency Unit #115-B',
+    agency: 'Edhi Foundation',
+    controlRoom: 'Edhi Emergency Control Desk',
+    unitType: 'Rapid Response Ambulance',
+    capabilities: ['Emergency Transport', 'Oxygen Cylinder', 'First-Aid Stretcher'],
+    phone: '115',
+    offsetLat: 0.0112,
+    offsetLng: 0.0079,
+    speedKmh: 40,
+    traumaPriority: 80,
+  },
+  {
+    id: 'team-chhipa-1020',
+    name: 'Chhipa Welfare — Rescue Van #1020-C',
+    agency: 'Chhipa Welfare',
+    controlRoom: 'Chhipa Operations Control Room',
+    unitType: 'Paramedic Rescue Van',
+    capabilities: ['Trauma Stretcher', 'Wound Dressing', 'Hospital Relay'],
+    phone: '1020',
+    offsetLat: -0.0145,
+    offsetLng: -0.0094,
+    speedKmh: 38,
+    traumaPriority: 76,
+  },
+  {
+    id: 'team-farishta-medic',
+    name: 'FARISHTA Community — Dr. Ayesha Trauma Unit',
+    agency: 'FARISHTA Medical Corps',
+    controlRoom: 'FARISHTA Community Triage Desk',
+    unitType: 'On-Call Trauma Physician',
+    capabilities: ['ATLS Emergency Care', 'Airway Management', 'Golden-Hour Aid'],
+    phone: '+92 301 9876543',
+    offsetLat: 0.0042,
+    offsetLng: 0.0046,
+    speedKmh: 46,
+    traumaPriority: 88,
+  },
+];
+
+interface CoordinatedTeam {
+  id: string;
+  name: string;
+  agency: string;
+  controlRoom: string;
+  unitType: string;
+  capabilities: string[];
+  phone: string;
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  distance: string;
+  etaMinutes: number;
+  eta: string;
+  availability: 'AVAILABLE' | 'BUSY';
+  suitabilityScore: number;
+  dispatchStatus: 'STANDBY' | 'ASSIGNED' | 'STOOD_DOWN' | 'BUSY_SKIPPED' | 'ARRIVED';
+  notificationMessage?: string;
+}
+
+interface ActiveDispatchRecord {
+  incidentId: string;
+  stage:
+    | 'STANDBY'
+    | 'ACCIDENT_DETECTED'
+    | 'CONTROL_ROOM_NOTIFIED'
+    | 'TEAM_DISPATCHED'
+    | 'OTHER_TEAMS_NOTIFIED'
+    | 'FAMILY_NOTIFIED'
+    | 'ARRIVED_ON_SCENE';
+  createdAt: string;
+  arrivedAt?: string;
+  arrivalConfirmed: boolean;
+  location: { lat: number; lng: number; areaName: string; city: string };
+  severityScore: number;
+  gForce: number;
+  controlRoomName: string;
+  targetHospitalName: string;
+  assignedTeam: CoordinatedTeam;
+  otherTeams: CoordinatedTeam[];
+  standDownMessage: string;
+  familyNotifications: Array<{
+    contactId: string;
+    name: string;
+    relation: string;
+    phone: string;
+    message: string;
+    sentAt: string;
+    arrivalNotified?: boolean;
+  }>;
+  steps: Array<{
+    key: string;
+    stepNumber: number;
+    title: string;
+    subtitle: string;
+    completed: boolean;
+    timestamp?: string;
+  }>;
+}
+
+let activeDispatchCase: ActiveDispatchRecord | null = null;
+
+function evaluateTeamsAroundLocation(
+  lat: number,
+  lng: number,
+  busyTeamIds: string[] = [],
+  severityScore = 70
+): CoordinatedTeam[] {
+  const busySet = new Set(busyTeamIds);
+  const isCritical = severityScore >= 65;
+
+  return BASE_RESCUE_TEAMS.map((t) => {
+    const teamLat = lat + t.offsetLat;
+    const teamLng = lng + t.offsetLng;
+    const distanceKm = haversineKm(lat, lng, teamLat, teamLng);
+    const etaMinutes = Math.max(1.2, Math.round((distanceKm / t.speedKmh) * 60 * 10) / 10);
+    const availability: 'AVAILABLE' | 'BUSY' = busySet.has(t.id) ? 'BUSY' : 'AVAILABLE';
+
+    // Suitability balances closest distance/ETA with trauma readiness
+    const distancePenalty = distanceKm * 18;
+    const traumaBonus = isCritical ? t.traumaPriority * 0.45 : t.traumaPriority * 0.25;
+    const suitabilityScore =
+      availability === 'BUSY'
+        ? -1
+        : Math.max(1, Math.round(100 - distancePenalty + traumaBonus));
+
+    return {
+      id: t.id,
+      name: t.name,
+      agency: t.agency,
+      controlRoom: t.controlRoom,
+      unitType: t.unitType,
+      capabilities: t.capabilities,
+      phone: t.phone,
+      lat: teamLat,
+      lng: teamLng,
+      distanceKm,
+      distance: formatDistance(distanceKm),
+      etaMinutes,
+      eta: `${etaMinutes.toFixed(1)} min`,
+      availability,
+      suitabilityScore,
+      dispatchStatus: 'STANDBY' as const,
+    };
+  }).sort((a, b) => a.distanceKm - b.distanceKm);
+}
 
 // ---------------------------------------------------------------------------
 // Express App & API Routes
@@ -533,6 +728,223 @@ async function createServer() {
       apiKey,
       configured: Boolean(apiKey),
     });
+  });
+
+  // Smart Dispatch & Team Coordination: Get nearby emergency teams & current case
+  app.get('/api/dispatch/teams', (req: Request, res: Response) => {
+    const rawLat = Number(req.query.lat);
+    const rawLng = Number(req.query.lng);
+    const lat = Number.isFinite(rawLat) ? rawLat : 31.5204;
+    const lng = Number.isFinite(rawLng) ? rawLng : 74.3587;
+    const busyParam = typeof req.query.busy === 'string' ? req.query.busy.split(',').filter(Boolean) : [];
+    const teams = evaluateTeamsAroundLocation(lat, lng, busyParam);
+    res.json({
+      teams,
+      activeCase: activeDispatchCase,
+      updatedAt: new Date().toISOString(),
+    });
+  });
+
+  // Smart Dispatch & Team Coordination: Execute 6-Step Single-Team Assignment Workflow
+  app.post('/api/dispatch/coordinate', (req: Request, res: Response) => {
+    const body = req.body as {
+      lat?: number;
+      lng?: number;
+      areaName?: string;
+      city?: string;
+      gForce?: number;
+      speedKmh?: number;
+      severityScore?: number;
+      targetHospitalName?: string;
+      busyTeamIds?: string[];
+      contacts?: Array<{ id?: string; name?: string; relation?: string; phone?: string; enabledAlert?: boolean }>;
+    };
+
+    const lat = Number.isFinite(Number(body.lat)) ? Number(body.lat) : 31.5204;
+    const lng = Number.isFinite(Number(body.lng)) ? Number(body.lng) : 74.3587;
+    const areaInfo = detectNearestArea(lat, lng);
+    const areaName = body.areaName || areaInfo.areaName;
+    const city = body.city || areaInfo.city;
+    const gForce = Number.isFinite(Number(body.gForce)) ? Number(body.gForce) : 5.8;
+    const speedKmh = Number.isFinite(Number(body.speedKmh)) ? Number(body.speedKmh) : 48;
+    const severityScore = Number.isFinite(Number(body.severityScore)) ? Number(body.severityScore) : 82;
+    const targetHospitalName = body.targetHospitalName || 'Nearest Emergency Trauma Hospital';
+    const busyTeamIds = Array.isArray(body.busyTeamIds) ? body.busyTeamIds : [];
+
+    const evaluated = evaluateTeamsAroundLocation(lat, lng, busyTeamIds, severityScore);
+    const availableTeams = evaluated
+      .filter((t) => t.availability === 'AVAILABLE')
+      .sort((a, b) => b.suitabilityScore - a.suitabilityScore || a.distanceKm - b.distanceKm);
+
+    // Select ONLY ONE nearest suitable available team (fallback to closest overall if all marked busy)
+    const winner = availableTeams[0] || evaluated[0];
+    const nowIso = new Date().toISOString();
+    const incidentId = `INC-${Date.now().toString().slice(-6)}`;
+
+    const assignedTeam: CoordinatedTeam = {
+      ...winner,
+      dispatchStatus: 'ASSIGNED',
+      notificationMessage: `ASSIGNED CASE ${incidentId}: Proceed immediately to ${areaName} (${winner.distance}, ETA ${winner.eta}). Target ER: ${targetHospitalName}.`,
+    };
+
+    const otherTeams: CoordinatedTeam[] = evaluated
+      .filter((t) => t.id !== assignedTeam.id)
+      .map((t) => ({
+        ...t,
+        dispatchStatus: t.availability === 'BUSY' ? ('BUSY_SKIPPED' as const) : ('STOOD_DOWN' as const),
+        notificationMessage: STAND_DOWN_MESSAGE,
+      }));
+
+    const armedContacts = Array.isArray(body.contacts)
+      ? body.contacts.filter((c) => c && c.enabledAlert !== false && c.name && c.phone)
+      : [];
+
+    const familyNotifications = armedContacts.map((c, idx) => ({
+      contactId: c.id || `fam-${idx}`,
+      name: c.name!,
+      relation: c.relation || 'Family',
+      phone: c.phone!,
+      message: `FARISHTA Alert: Accident detected near ${areaName}, ${city}. ${assignedTeam.name} has been dispatched (ETA ${assignedTeam.eta}) and is routing to ${targetHospitalName}. Live GPS: https://maps.google.com/?q=${lat.toFixed(5)},${lng.toFixed(5)}`,
+      sentAt: nowIso,
+      arrivalNotified: false,
+    }));
+
+    activeDispatchCase = {
+      incidentId,
+      stage: 'FAMILY_NOTIFIED',
+      createdAt: nowIso,
+      arrivalConfirmed: false,
+      location: { lat, lng, areaName, city },
+      severityScore,
+      gForce,
+      controlRoomName: assignedTeam.controlRoom,
+      targetHospitalName,
+      assignedTeam,
+      otherTeams,
+      standDownMessage: STAND_DOWN_MESSAGE,
+      familyNotifications,
+      steps: [
+        {
+          key: 'accident_detected',
+          stepNumber: 1,
+          title: 'Accident Detected',
+          subtitle: `GPS (${lat.toFixed(4)}°, ${lng.toFixed(4)}°) & ${gForce.toFixed(1)}G emergency alert generated at ${areaName}.`,
+          completed: true,
+          timestamp: nowIso,
+        },
+        {
+          key: 'services_notified',
+          stepNumber: 2,
+          title: 'Nearby Emergency Services Notified',
+          subtitle: `${assignedTeam.controlRoom} alerted. Exclusive single-team lock engaged.`,
+          completed: true,
+          timestamp: nowIso,
+        },
+        {
+          key: 'team_dispatched',
+          stepNumber: 3,
+          title: 'Nearest Suitable Team Dispatched',
+          subtitle: `${assignedTeam.name} selected (${assignedTeam.distance}, ETA ${assignedTeam.eta}, Available).`,
+          completed: true,
+          timestamp: nowIso,
+        },
+        {
+          key: 'other_teams_notified',
+          stepNumber: 4,
+          title: 'Other Teams Notified (Stand-Down)',
+          subtitle: `${otherTeams.length} other teams notified: "${STAND_DOWN_MESSAGE}"`,
+          completed: true,
+          timestamp: nowIso,
+        },
+        {
+          key: 'family_notified',
+          stepNumber: 5,
+          title: 'Family Notification Sent',
+          subtitle:
+            familyNotifications.length > 0
+              ? `${familyNotifications.length} saved contact(s) notified that rescue team is dispatched.`
+              : 'Ready to notify saved contacts once added in Contacts tab.',
+          completed: true,
+          timestamp: nowIso,
+        },
+        {
+          key: 'arrival_confirmed',
+          stepNumber: 6,
+          title: 'Arrival Confirmation',
+          subtitle: `Awaiting ${assignedTeam.name} on-scene arrival confirmation (ETA ${assignedTeam.eta}).`,
+          completed: false,
+        },
+      ],
+    };
+
+    crashLogs.unshift({
+      id: incidentId,
+      type: 'CRASH_REPORT',
+      lat,
+      lng,
+      gForce,
+      speedKmh,
+      timestamp: nowIso,
+      notes: `Assigned exclusively to ${assignedTeam.name} (${assignedTeam.distance}); ${otherTeams.length} teams stood down.`,
+    });
+    if (crashLogs.length > 30) crashLogs.pop();
+
+    res.json({ ok: true, dispatchCase: activeDispatchCase });
+  });
+
+  // Smart Dispatch & Team Coordination: Step 6 Arrival Confirmation
+  app.post('/api/dispatch/confirm-arrival', (_req: Request, res: Response) => {
+    if (!activeDispatchCase) {
+      res.status(404).json({ error: 'No active dispatch case to confirm arrival.' });
+      return;
+    }
+
+    const arrivedAt = new Date().toISOString();
+    activeDispatchCase = {
+      ...activeDispatchCase,
+      stage: 'ARRIVED_ON_SCENE',
+      arrivedAt,
+      arrivalConfirmed: true,
+      assignedTeam: {
+        ...activeDispatchCase.assignedTeam,
+        dispatchStatus: 'ARRIVED',
+        eta: 'On Scene',
+        etaMinutes: 0,
+      },
+      familyNotifications: activeDispatchCase.familyNotifications.map((f) => ({
+        ...f,
+        arrivalNotified: true,
+        message: `FARISHTA Arrival Update: ${activeDispatchCase!.assignedTeam.name} has arrived at the accident scene (${activeDispatchCase!.location.areaName}) and is assisting the patient toward ${activeDispatchCase!.targetHospitalName}.`,
+      })),
+      steps: activeDispatchCase.steps.map((s) =>
+        s.key === 'arrival_confirmed'
+          ? {
+              ...s,
+              completed: true,
+              timestamp: arrivedAt,
+              subtitle: `Confirmed: ${activeDispatchCase!.assignedTeam.name} arrived on scene and began trauma care.`,
+            }
+          : s
+      ),
+    };
+
+    crashLogs.unshift({
+      id: `ARV-${Date.now().toString().slice(-5)}`,
+      type: 'TEAM_ARRIVAL',
+      lat: activeDispatchCase.location.lat,
+      lng: activeDispatchCase.location.lng,
+      timestamp: arrivedAt,
+      notes: `${activeDispatchCase.assignedTeam.name} arrived on scene.`,
+    });
+    if (crashLogs.length > 30) crashLogs.pop();
+
+    res.json({ ok: true, dispatchCase: activeDispatchCase });
+  });
+
+  // Reset / Clear active dispatch case
+  app.post('/api/dispatch/reset', (_req: Request, res: Response) => {
+    activeDispatchCase = null;
+    res.json({ ok: true });
   });
 
   // Nearby Doctors + Nearest Hospitals + Area Detection

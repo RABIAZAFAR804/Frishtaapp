@@ -6,10 +6,13 @@ import {
   DetectedLocation,
   NearbyDoctor,
   NearbyHospital,
+  RescueTeamUnit,
+  SmartDispatchCase,
 } from '../types';
 import { EMERGENCY_SERVICES } from '../data/emergencyServices';
 import { soundEffects } from '../utils/audio';
 import { LiveEmergencyMap } from './LiveEmergencyMap';
+import { SmartDispatchCard } from './SmartDispatchCard';
 import { doctorToServiceTarget, hospitalToServiceTarget } from './NearbyDoctorsHospitalsSection';
 import { buildWhatsAppUrl, buildEmergencyWhatsAppMessage } from '../utils/whatsapp';
 import { WhatsAppIcon } from './WhatsAppIcon';
@@ -22,6 +25,13 @@ interface RadarViewProps {
   selectedHospitalId: string;
   mapsApiKey: string;
   isEmergencyActive?: boolean;
+  dispatchCase?: SmartDispatchCase | null;
+  candidateTeams?: RescueTeamUnit[];
+  isCoordinating?: boolean;
+  onTriggerSmartDispatch?: () => void;
+  onConfirmArrival?: () => void;
+  onToggleTeamAvailability?: (teamId: string) => void;
+  onResetDispatch?: () => void;
   onSelectTargetHospital: (hosp: NearbyHospital) => void;
   onOpenCall: (responder: Responder) => void;
   onOpenRoute: (responder: Responder) => void;
@@ -30,13 +40,20 @@ interface RadarViewProps {
 }
 
 export const RadarView: React.FC<RadarViewProps> = ({
-  contacts,
+  contacts = [],
   location,
   doctors,
   hospitals,
   selectedHospitalId,
   mapsApiKey,
   isEmergencyActive = false,
+  dispatchCase = null,
+  candidateTeams = [],
+  isCoordinating = false,
+  onTriggerSmartDispatch,
+  onConfirmArrival,
+  onToggleTeamAvailability,
+  onResetDispatch,
   onSelectTargetHospital,
   onOpenCall,
   onOpenRoute,
@@ -162,55 +179,104 @@ export const RadarView: React.FC<RadarViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
         {/* LEFT COLUMN (7 cols): Dispatch Widget + Interactive Map/Radar + Range Filters */}
         <div className="lg:col-span-7 space-y-4 min-w-0">
-      {/* Primary Explicit Alert Widget from Prompt */}
+      {/* Primary Smart Dispatch & Coordination Alert Widget */}
       <div className="w-full rounded-2xl bg-gradient-to-r from-[#17252f] via-[#1c2a38] to-[#171b26] border border-[#00f1fd]/50 p-4 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#00f1fd] via-[#4edea3] to-transparent" />
+        <div
+          className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${
+            dispatchCase?.arrivalConfirmed
+              ? 'from-[#4edea3] via-[#00f1fd] to-transparent'
+              : 'from-[#00f1fd] via-[#4edea3] to-transparent'
+          }`}
+        />
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-full bg-[#00f1fd]/20 text-[#00f1fd] flex items-center justify-center shrink-0 shadow-[0_0_16px_rgba(0,241,253,0.4)]">
               <span className="material-symbols-outlined text-[26px] animate-pulse">
-                airport_shuttle
+                {dispatchCase?.arrivalConfirmed ? 'verified' : 'airport_shuttle'}
               </span>
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-[#00f1fd] uppercase tracking-wider">
-                  DISPATCH ACTIVE
+                  {dispatchCase?.arrivalConfirmed
+                    ? 'ARRIVAL CONFIRMED'
+                    : dispatchCase
+                    ? '1 TEAM ASSIGNED • OTHERS STOOD DOWN'
+                    : 'SMART DISPATCH READY'}
                 </span>
                 <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-ping" />
               </div>
               <h3 className="font-display text-base font-extrabold text-white mt-0.5">
-                Farishta Dispatcher is on the way.
+                {dispatchCase?.arrivalConfirmed
+                  ? `${dispatchCase.assignedTeam.name} has arrived on scene.`
+                  : dispatchCase
+                  ? `${dispatchCase.assignedTeam.name} is on the way.`
+                  : 'Single Nearest Suitable Team Coordination Active'}
               </h3>
               <p className="text-xs text-[#4edea3] font-bold mt-0.5">
-                Saving lives by making 1122 faster!
+                {dispatchCase
+                  ? `Control Room: ${dispatchCase.controlRoomName} • Zero resource duplication`
+                  : 'Assigns 1 nearest suitable team & notifies other teams to stand down.'}
               </p>
             </div>
           </div>
 
           <div className="text-right shrink-0">
-            <span className="text-[10px] text-[#dfe2f1]/60 block uppercase font-bold">ETA</span>
+            <span className="text-[10px] text-[#dfe2f1]/60 block uppercase font-bold">
+              {dispatchCase?.arrivalConfirmed ? 'STATUS' : 'ETA'}
+            </span>
             <span className="font-display text-lg font-black text-[#00f1fd] font-mono-num">
-              {formatEta(dispatcherEtaSeconds)}
+              {dispatchCase?.arrivalConfirmed
+                ? 'ON SCENE'
+                : dispatchCase
+                ? dispatchCase.assignedTeam.eta
+                : formatEta(dispatcherEtaSeconds)}
             </span>
           </div>
         </div>
 
-        {/* Live Status Checkmarks Bar */}
+        {/* Live 6-Step Coordination Checkmarks Bar */}
         <div className="mt-3 pt-3 border-t border-[#313540] flex flex-wrap gap-2 text-[11px] font-semibold">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#171b26] border border-[#00f1fd]/40 text-[#00f1fd]">
+            <span className="material-symbols-outlined text-[14px]">verified</span>
+            <span>
+              1 Suitable Team:{' '}
+              {dispatchCase
+                ? dispatchCase.assignedTeam.name
+                : candidateTeams.find((t) => t.availability === 'AVAILABLE')?.name || 'Rescue 1122'}{' '}
+              🟢
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#171b26] border border-[#ffb3b5]/40 text-[#ffb3b5]">
+            <span className="material-symbols-outlined text-[14px]">notifications_paused</span>
+            <span>
+              Other Teams Stood Down (
+              {dispatchCase
+                ? dispatchCase.otherTeams.length
+                : Math.max(candidateTeams.length - 1, 0)}
+              )
+            </span>
+          </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#171b26] border border-[#4edea3]/40 text-[#4edea3]">
             <span className="material-symbols-outlined text-[14px]">check_circle</span>
             <span>
-              SMS Sent to Emergency Contacts ({contacts ? contacts.filter(c => c.enabledAlert !== false).length : 3}) 🟢
+              Family Notified (
+              {dispatchCase
+                ? dispatchCase.familyNotifications.length
+                : contacts.filter((c) => c.enabledAlert !== false).length}
+              ) 🟢
             </span>
           </div>
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#171b26] border border-[#00f1fd]/40 text-[#00f1fd]">
-            <span className="material-symbols-outlined text-[14px]">verified</span>
-            <span>Rescue 1122 CAD Unit Dispatched 🟢</span>
-          </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#171b26] border border-[#4edea3]/40 text-[#4edea3]">
-            <span className="material-symbols-outlined text-[14px]">cell_tower</span>
-            <span>Edhi 115 &amp; Chhipa 1020 Alerted 🟢</span>
+            <span className="material-symbols-outlined text-[14px]">where_to_vote</span>
+            <span>
+              Arrival:{' '}
+              {dispatchCase?.arrivalConfirmed
+                ? 'Confirmed ✓'
+                : dispatchCase
+                ? 'En Route'
+                : 'Standby'}
+            </span>
           </div>
         </div>
       </div>
@@ -681,17 +747,30 @@ export const RadarView: React.FC<RadarViewProps> = ({
         </div>
         <div className="flex flex-col">
           <span className="text-xs text-[#ff5166] uppercase font-bold tracking-wider">
-            Golden Window Defense
+            Golden Window Defense (Zero Duplication)
           </span>
           <p className="text-xs text-[#dfe2f1]/80 mt-0.5 leading-snug">
-            Community responders, Edhi (115), and Bykea emergency bikers provide immediate CPR &amp; arterial bleed wound pressure during the critical 15-to-5 minute window while Rescue 1122 ambulance is en route.
+            FARISHTA assigns only the single nearest suitable emergency team while standing down other fleets so resources remain free for other emergencies across the city.
           </p>
         </div>
       </div>
         </div>
 
-        {/* RIGHT COLUMN (5 cols): Active Responders + Nearest Fleets */}
+        {/* RIGHT COLUMN (5 cols): Smart Dispatch Card + Active Responders + Nearest Fleets */}
         <div className="lg:col-span-5 space-y-4 min-w-0">
+          {onTriggerSmartDispatch && onConfirmArrival && onToggleTeamAvailability && (
+            <SmartDispatchCard
+              dispatchCase={dispatchCase}
+              candidateTeams={candidateTeams}
+              location={location}
+              contacts={contacts}
+              isCoordinating={isCoordinating}
+              onTriggerSmartDispatch={onTriggerSmartDispatch}
+              onConfirmArrival={onConfirmArrival}
+              onToggleTeamAvailability={onToggleTeamAvailability}
+              onResetDispatch={onResetDispatch}
+            />
+          )}
 
       {/* Section 1: Active Farishta Community Responders */}
       <div className="space-y-3">
@@ -906,12 +985,14 @@ export const RadarView: React.FC<RadarViewProps> = ({
         </div>
       </div>
 
-      {/* Auto-dispatching nearest verified helper tag */}
+      {/* Single-team smart coordination tag */}
       <div className="w-full rounded-2xl bg-[#171b26] border border-[#262a35] p-3.5 flex items-center justify-between mt-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="material-symbols-outlined text-[#4edea3] text-[20px] shrink-0">security</span>
           <span className="text-xs text-white font-medium truncate">
-            Auto-dispatching nearest verified helper &amp; fleet
+            {dispatchCase
+              ? `1-Team Lock: ${dispatchCase.assignedTeam.name} assigned • Others stood down`
+              : 'Smart Dispatch: Assigns 1 nearest suitable team & notifies family'}
           </span>
         </div>
         <div className="w-2.5 h-2.5 rounded-full bg-[#4edea3] animate-ping shrink-0" />

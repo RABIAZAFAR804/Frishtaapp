@@ -4,6 +4,7 @@ import {
   RescueSystemConfig,
   EmergencyContact,
   DetectedLocation,
+  RescueTeamUnit,
 } from '../types';
 import { soundEffects } from '../utils/audio';
 import { buildWhatsAppUrl, buildEmergencyWhatsAppMessage } from '../utils/whatsapp';
@@ -13,6 +14,7 @@ interface EmergencyViewProps {
   rescueConfig?: RescueSystemConfig;
   contacts?: EmergencyContact[];
   location?: DetectedLocation;
+  candidateTeams?: RescueTeamUnit[];
   gForce?: number;
   speedKmh?: number;
   onCancelEmergency: () => void;
@@ -24,6 +26,7 @@ export const EmergencyView: React.FC<EmergencyViewProps> = ({
   rescueConfig,
   contacts = [],
   location,
+  candidateTeams = [],
   gForce = 5.8,
   speedKmh = 48,
   onCancelEmergency,
@@ -113,6 +116,11 @@ export const EmergencyView: React.FC<EmergencyViewProps> = ({
   };
 
   const targetContacts = contacts.filter((c) => c.enabledAlert !== false);
+  const availableTeams = candidateTeams
+    .filter((t) => t.availability === 'AVAILABLE')
+    .sort((a, b) => b.suitabilityScore - a.suitabilityScore || a.distanceKm - b.distanceKm);
+  const selectedTeam = availableTeams[0] || candidateTeams[0];
+  const otherTeamsCount = Math.max(0, candidateTeams.length - (selectedTeam ? 1 : 0));
 
   return (
     <div className="flex flex-col w-full pb-6 pt-1 max-w-6xl mx-auto animate-in fade-in duration-300">
@@ -453,145 +461,115 @@ export const EmergencyView: React.FC<EmergencyViewProps> = ({
           </div>
         </div>
 
-        {/* Autonomous CAD Pipeline Checklist */}
+        {/* Smart Dispatch & Single-Team Coordination Pipeline */}
         <div className="bg-[#1c1f2a] border border-[#262a35] rounded-2xl p-4 shadow-md flex flex-col gap-3">
           <div className="flex items-center justify-between pb-1 border-b border-[#262a35]">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px] text-[#00f1fd]">lan</span>
+              <span className="material-symbols-outlined text-[18px] text-[#00f1fd]">hub</span>
               <span className="font-display text-xs font-bold text-white uppercase tracking-wider">
-                Autonomous CAD Pipeline
+                Smart Dispatch &amp; Team Coordination
               </span>
             </div>
             <span className="text-[10px] font-mono-num text-[#4edea3] font-bold">
-              TIER-1 RESPONSE
+              1-TEAM EXCLUSIVE LOCK
             </span>
           </div>
 
           <div className="flex flex-col gap-2">
-            {/* Step 1 */}
+            {/* Step 1: Accident Detected */}
             <div
-              className={`flex items-center justify-between p-2.5 rounded-xl border transition-all ${
+              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border transition-all ${
                 isCancelled
                   ? 'bg-[#171b26] border-[#313540] text-[#dfe2f1]/60'
                   : 'bg-[#262a35] border-[#ff334b]/40 text-white'
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <span className="relative flex h-3 w-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="relative flex h-3 w-3 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ff334b] opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-3 w-3 bg-[#ff334b]"></span>
                 </span>
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0">
                   <span className="text-xs font-bold">
-                    {isCancelled ? '[Aborted] False Alarm Buffer' : '[Active] 10s False Alarm Buffer'}
+                    {isCancelled ? '1. [Aborted] Accident Alert Cancelled' : '1. Accident Detected • Alert Generated'}
                   </span>
-                  <span className="text-[10px] text-[#dfe2f1]/60 font-mono-num">
-                    {isCancelled ? 'Aborted by rider' : 'Standby countdown in progress'}
+                  <span className="text-[10px] text-[#dfe2f1]/60 font-mono-num truncate">
+                    {isCancelled
+                      ? 'Rider confirmed safety within 10s buffer'
+                      : `${location?.areaName || 'GPS Locked'} (${gForce.toFixed(1)}G impact)`}
                   </span>
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded bg-[#ff334b]/20 text-[#ffb3b5] text-[10px] font-bold font-mono-num">
+              <span className="px-2 py-0.5 rounded bg-[#ff334b]/20 text-[#ffb3b5] text-[10px] font-bold font-mono-num shrink-0">
                 {isCancelled ? 'ABORTED' : `T-${timeLeft < 10 ? '0' : ''}${timeLeft}s`}
               </span>
             </div>
 
-            {/* Step 2: Rescue 1122 Locked Master CAD */}
+            {/* Step 2: Nearby Emergency Services Notified (Single Case Lock) */}
             <div
-              className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border ${
                 isDispatched
                   ? 'bg-[#172e25] border-[#4edea3]/40 text-white'
-                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/60'
+                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/70'
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <span
-                  className={`w-3 h-3 rounded-full ${
-                    isDispatched ? 'bg-[#4edea3]' : 'bg-[#313540]'
+                  className={`w-3 h-3 rounded-full shrink-0 ${
+                    isDispatched ? 'bg-[#4edea3]' : 'bg-[#00f1fd]'
                   }`}
                 />
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0">
                   <span className="text-xs font-semibold flex items-center gap-1.5">
-                    <span>{isDispatched ? '✓ Rescue 1122 Master CAD Sent' : '[Priority #1] Rescue 1122 CAD'}</span>
-                    <span className="material-symbols-outlined text-[12px] text-[#ff334b]">lock</span>
+                    <span>2. Nearby Emergency Control Room Notified</span>
+                    <span className="material-symbols-outlined text-[12px] text-[#00f1fd]">lock</span>
                   </span>
-                  <span className="text-[10px] text-[#dfe2f1]/50">
-                    {rescueConfig?.forwardToAll1122Headquarters
-                      ? 'Forwarded to ALL 5 1122 Regional & Provincial HQs'
-                      : 'Direct Gov Emergency PSAP Integration (Gulberg HQ)'}
+                  <span className="text-[10px] text-[#dfe2f1]/55">
+                    Case locked to 1 selected team only (no multi-team duplication)
                   </span>
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num font-bold">
-                {isDispatched ? 'TRANSMITTED' : 'LOCKED #1'}
+              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num font-bold shrink-0">
+                {isDispatched ? 'LOCKED' : '1-TEAM RULE'}
               </span>
             </div>
 
-            {/* Step 3: Configured Secondary Fleet */}
+            {/* Step 3: Nearest Suitable Team Dispatched */}
             <div
-              className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border ${
                 isDispatched
                   ? 'bg-[#172e25] border-[#4edea3]/40 text-white'
-                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/60'
+                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/70'
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <span
-                  className={`w-3 h-3 rounded-full ${
+                  className={`w-3 h-3 rounded-full shrink-0 ${
                     isDispatched ? 'bg-[#00f1fd]' : 'bg-[#313540]'
                   }`}
                 />
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold">
-                    {isDispatched
-                      ? `✓ ${rescueConfig?.secondarySystem.name || 'Edhi Foundation 115'} Alerted`
-                      : `[Secondary Fleet] ${rescueConfig?.secondarySystem.name || 'Edhi Foundation 115'}`}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold truncate">
+                    3. {isDispatched ? '✓ Nearest Suitable Team Dispatched' : 'Select Nearest Suitable Team'}
                   </span>
-                  <span className="text-[10px] text-[#dfe2f1]/50">
-                    Victim configured backup fleet • {rescueConfig?.secondarySystem.distance || '1.4 km'}
-                  </span>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num">
-                {isDispatched ? 'ALERTED' : 'CONFIGURED'}
-              </span>
-            </div>
-
-            {/* Step 4: Bykea & Community Bikers */}
-            <div
-              className={`flex items-center justify-between p-2.5 rounded-xl border ${
-                isDispatched
-                  ? 'bg-[#172e25] border-[#4edea3]/40 text-white'
-                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/60'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <span
-                  className={`w-3 h-3 rounded-full ${
-                    isDispatched ? 'bg-[#4edea3]' : 'bg-[#313540]'
-                  }`}
-                />
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold">
-                    {isDispatched
-                      ? '✓ Bykea Emergency Biker Pod Dispatched'
-                      : '[Pending] Bykea & Biker Couriers'}
-                  </span>
-                  <span className="text-[10px] text-[#dfe2f1]/50">
-                    First-aid arterial tourniquet carrier (0.5 km)
+                  <span className="text-[10px] text-[#dfe2f1]/55 truncate">
+                    {selectedTeam
+                      ? `${selectedTeam.name} (${selectedTeam.distance}, ${selectedTeam.eta} ETA • Available)`
+                      : 'Evaluating team location, distance & availability'}
                   </span>
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num">
-                {isDispatched ? 'EN ROUTE' : 'ROUTING'}
+              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num shrink-0">
+                {isDispatched ? 'DISPATCHED' : selectedTeam?.eta || 'READY'}
               </span>
             </div>
 
-            {/* Step 5: SMS Lifelines */}
+            {/* Step 4: Other Teams Notified (Stand-Down Notice) */}
             <div
-              className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border ${
                 isDispatched
                   ? 'bg-[#172e25] border-[#4edea3]/40 text-white'
-                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/60'
+                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/70'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -602,12 +580,40 @@ export const EmergencyView: React.FC<EmergencyViewProps> = ({
                 />
                 <div className="flex flex-col min-w-0">
                   <span className="text-xs font-semibold">
-                    {isDispatched
-                      ? `✓ SMS Broadcasted to ${targetContacts.length} Emergency Contacts`
-                      : `[Pending 10s] SMS to ${targetContacts.length} Emergency Contacts`}
+                    4. Other Teams Notified ({otherTeamsCount} Stood Down)
                   </span>
-                  <span className="text-[10px] text-[#dfe2f1]/50 truncate">
-                    {targetContacts.map((c) => `${c.name} (${c.relation})`).join(', ') || 'No contacts configured'}
+                  <span className="text-[10px] text-[#dfe2f1]/55">
+                    &ldquo;This emergency has already been assigned to another team. No additional response is required at this time.&rdquo;
+                  </span>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num shrink-0">
+                {isDispatched ? 'STOOD DOWN' : 'AUTO'}
+              </span>
+            </div>
+
+            {/* Step 5: Family Notification */}
+            <div
+              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border ${
+                isDispatched
+                  ? 'bg-[#172e25] border-[#4edea3]/40 text-white'
+                  : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/70'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span
+                  className={`w-3 h-3 rounded-full shrink-0 ${
+                    isDispatched ? 'bg-[#4edea3]' : 'bg-[#313540]'
+                  }`}
+                />
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold">
+                    5. {isDispatched
+                      ? `✓ Family Notified (${targetContacts.length} Contacts)`
+                      : `Family Notification (${targetContacts.length} Contacts)`}
+                  </span>
+                  <span className="text-[10px] text-[#dfe2f1]/55 truncate">
+                    Alerts saved contacts that {selectedTeam?.agency || 'Rescue'} team is dispatched
                   </span>
                 </div>
               </div>
@@ -616,33 +622,31 @@ export const EmergencyView: React.FC<EmergencyViewProps> = ({
               </span>
             </div>
 
-            {/* Step 6: Configured Nearest Target Hospital ER */}
+            {/* Step 6: Arrival Confirmation */}
             <div
-              className={`flex items-center justify-between p-2.5 rounded-xl border ${
+              className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border ${
                 isDispatched
-                  ? 'bg-[#172e25] border-[#4edea3]/40 text-white'
+                  ? 'bg-[#171b26] border-[#00f1fd]/40 text-white'
                   : 'bg-[#171b26] border-[#262a35] text-[#dfe2f1]/60'
               }`}
             >
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <span
-                  className={`w-3 h-3 rounded-full ${
-                    isDispatched ? 'bg-[#00f1fd]' : 'bg-[#313540]'
+                  className={`w-3 h-3 rounded-full shrink-0 ${
+                    isDispatched ? 'bg-[#00f1fd] animate-pulse' : 'bg-[#313540]'
                   }`}
                 />
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold">
-                    {isDispatched
-                      ? `✓ ${rescueConfig?.targetHospital.name || 'Services Hospital'} ER Pre-Notified`
-                      : `[Nearest Target ER] ${rescueConfig?.targetHospital.name || 'Services Hospital'}`}
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold truncate">
+                    6. Arrival Confirmation &rarr; {rescueConfig?.targetHospital.name || 'Target ER'}
                   </span>
-                  <span className="text-[10px] text-[#dfe2f1]/50">
-                    Trauma bay reserved via {rescueConfig?.targetHospital.assigned1122Station || 'Station #12'}
+                  <span className="text-[10px] text-[#dfe2f1]/55">
+                    Confirms on-scene arrival on Radar HUD &amp; updates family
                   </span>
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num font-bold">
-                {isDispatched ? 'RESERVED' : rescueConfig?.targetHospital.distance || '2.2 km'}
+              <span className="px-2 py-0.5 rounded bg-[#262a35] text-[10px] font-mono-num font-bold shrink-0">
+                {isDispatched ? 'TRACKING' : 'STEP 6'}
               </span>
             </div>
           </div>

@@ -13,6 +13,7 @@ import { loadEmergencyContacts, saveEmergencyContacts } from './data/initialCont
 import { soundEffects } from './utils/audio';
 import { useLocationAndNearby } from './hooks/useLocationAndNearby';
 import { useAccidentSensors } from './hooks/useAccidentSensors';
+import { useSmartDispatch } from './hooks/useSmartDispatch';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { OfflineIndicator } from './components/PWAInstallButton';
@@ -184,6 +185,16 @@ export default function App() {
     resetSensorsToNormal,
   } = useAccidentSensors(autoDetectEnabled, location.lat, location.lng, handleTriggerSOS);
 
+  const {
+    candidateTeams,
+    dispatchCase,
+    isCoordinating,
+    toggleTeamAvailability,
+    runSmartDispatch,
+    confirmArrival,
+    resetDispatch,
+  } = useSmartDispatch(location);
+
   useEffect(() => {
     setLiveSpeedForNearby(sensorState.speedKmh);
   }, [sensorState.speedKmh]);
@@ -222,28 +233,54 @@ export default function App() {
 
   const handleCancelEmergency = () => {
     setIsEmergencyActive(false);
+    resetDispatch();
     setActiveTab('monitor');
     showToast('✓ Autonomous CAD Dispatch Aborted. Standby Active.');
   };
 
+  const triggerCoordinatedDispatch = useCallback(
+    async (customSeverity?: number) => {
+      const result = await runSmartDispatch({
+        gForce: sensorState.gForce,
+        speedKmh: sensorState.speedKmh,
+        severityScore: customSeverity ?? sensorState.severityScore,
+        targetHospitalName: rescueConfig.targetHospital.name,
+        contacts,
+      });
+      setIsEmergencyActive(true);
+      setActiveTab('radar');
+      showToast(
+        `🚑 ${result.assignedTeam.name} dispatched (${result.assignedTeam.eta}) • ${result.otherTeams.length} other teams stood down!`
+      );
+    },
+    [
+      runSmartDispatch,
+      sensorState.gForce,
+      sensorState.speedKmh,
+      sensorState.severityScore,
+      rescueConfig.targetHospital.name,
+      contacts,
+      showToast,
+    ]
+  );
+
   const handleDispatchConfirmed = () => {
-    setIsEmergencyActive(true);
-    setActiveTab('radar');
-    const alertCount = contacts.filter((c) => c.enabledAlert !== false).length;
-    showToast(`🚑 1122 Dispatched & SMS GPS sent to ${alertCount} Emergency Contacts!`);
+    triggerCoordinatedDispatch();
   };
 
   const handleWitnessSubmit = (details: { casualties: string; severity: string; notes: string }) => {
     setIsWitnessModalOpen(false);
-    setIsEmergencyActive(true);
-    setActiveTab('radar');
-    showToast(`✓ Multi-Agency CAD Dispatched: ${details.casualties} • Target: ${rescueConfig.targetHospital.name}`);
+    triggerCoordinatedDispatch(details.severity.includes('Critical') ? 92 : 74);
   };
 
-  const handleBroadcastAllServices = () => {
-    setIsEmergencyActive(true);
-    setActiveTab('radar');
-    showToast(`📡 Simultaneous CAD Broadcast: Rescue 1122 (All HQs), ${rescueConfig.secondarySystem.name} & ${rescueConfig.targetHospital.name}!`);
+  const handleSmartDispatchFromHub = () => {
+    triggerCoordinatedDispatch();
+  };
+
+  const handleConfirmTeamArrival = async () => {
+    await confirmArrival();
+    soundEffects.playSuccessDispatch();
+    showToast('✓ Rescue Team Arrival Confirmed on Scene • Family Contacts Notified!');
   };
 
   // Contacts handlers
@@ -453,6 +490,13 @@ export default function App() {
             onTriggerEmergency={handleTriggerSOS}
             onOpenWitnessModal={() => setIsWitnessModalOpen(true)}
             mapsApiKey={mapsApiKey}
+            dispatchCase={dispatchCase}
+            candidateTeams={candidateTeams}
+            isCoordinating={isCoordinating}
+            onTriggerSmartDispatch={handleSmartDispatchFromHub}
+            onConfirmArrival={handleConfirmTeamArrival}
+            onToggleTeamAvailability={toggleTeamAvailability}
+            onResetDispatch={resetDispatch}
           />
         )}
 
@@ -500,6 +544,7 @@ export default function App() {
             rescueConfig={rescueConfig}
             contacts={contacts}
             location={location}
+            candidateTeams={candidateTeams}
             gForce={sensorState.gForce}
             speedKmh={sensorState.speedKmh}
             onCancelEmergency={() => {
@@ -520,6 +565,13 @@ export default function App() {
             selectedHospitalId={rescueConfig.targetHospital.id}
             mapsApiKey={mapsApiKey}
             isEmergencyActive={isEmergencyActive || sensorState.crashDetected}
+            dispatchCase={dispatchCase}
+            candidateTeams={candidateTeams}
+            isCoordinating={isCoordinating}
+            onTriggerSmartDispatch={handleSmartDispatchFromHub}
+            onConfirmArrival={handleConfirmTeamArrival}
+            onToggleTeamAvailability={toggleTeamAvailability}
+            onResetDispatch={resetDispatch}
             onSelectTargetHospital={handleSelectTargetHospital}
             onOpenCall={(responder) => setActiveCallTarget(responder)}
             onOpenRoute={(responder) => setActiveRouteTarget(responder)}
@@ -531,18 +583,25 @@ export default function App() {
         {activeTab === 'services' && (
           <ServicesHubView
             rescueConfig={rescueConfig}
+            contacts={contacts}
             location={location}
             doctors={doctors}
             hospitals={hospitals}
             isLoadingNearby={isLoadingNearby}
             selectedPresetId={selectedPresetId}
+            dispatchCase={dispatchCase}
+            candidateTeams={candidateTeams}
+            isCoordinating={isCoordinating}
+            onToggleTeamAvailability={toggleTeamAvailability}
+            onConfirmArrival={handleConfirmTeamArrival}
+            onResetDispatch={resetDispatch}
             onSelectPreset={selectAreaPreset}
             onRefreshGPS={detectLiveGPS}
             onSelectTargetHospital={handleSelectTargetHospital}
             onOpenRescueConfigModal={() => setIsRescueConfigModalOpen(true)}
             onOpenServiceRoute={(service) => setActiveRouteTarget(service)}
             onOpenServiceCall={(service) => setActiveCallTarget(service)}
-            onBroadcastAllServices={handleBroadcastAllServices}
+            onBroadcastAllServices={handleSmartDispatchFromHub}
           />
         )}
 

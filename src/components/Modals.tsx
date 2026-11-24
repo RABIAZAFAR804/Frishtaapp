@@ -341,7 +341,7 @@ export const WitnessModal: React.FC<WitnessModalProps> = ({ isOpen, onClose, onS
         </div>
 
         <p className="text-xs text-[#dfe2f1]/70 mb-3">
-          You are reporting an accident as a bystander/witness. Your current GPS will be transmitted to Rescue 1122, Edhi (115), Chhipa (1020), and nearest Farishta community doctors.
+          You are reporting an accident as a bystander/witness. Your live GPS is sent to the Smart Dispatch Control Room to assign only the single nearest suitable team, stand down other units, and notify emergency contacts.
         </p>
 
         {/* Form fields */}
@@ -429,7 +429,7 @@ export const WitnessModal: React.FC<WitnessModalProps> = ({ isOpen, onClose, onS
           className="mt-4 w-full py-3.5 rounded-xl bg-gradient-to-r from-[#ff334b] to-[#be0035] text-white font-display font-extrabold text-sm uppercase tracking-wider shadow-[0_0_24px_rgba(255,51,75,0.45)] active:scale-98 transition-transform flex items-center justify-center gap-2"
         >
           <span className="material-symbols-outlined text-[20px]">e911_emergency</span>
-          <span>Broadcast Multi-Agency CAD Alert</span>
+          <span>Dispatch 1 Nearest Suitable Team</span>
         </button>
       </div>
     </div>

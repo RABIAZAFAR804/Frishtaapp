@@ -9,10 +9,13 @@ import {
   PredictiveWarning,
   SmartSensorState,
   EmergencyService,
+  RescueTeamUnit,
+  SmartDispatchCase,
 } from '../types';
 import { soundEffects } from '../utils/audio';
 import { Farishta3DScene } from './Farishta3DScene';
 import { SmartDetectionPanel } from './SmartDetectionPanel';
+import { SmartDispatchCard } from './SmartDispatchCard';
 import { LiveEmergencyMap } from './LiveEmergencyMap';
 import {
   NearbyDoctorsHospitalsSection,
@@ -59,6 +62,13 @@ interface MonitorViewProps {
   onTriggerEmergency: () => void;
   onOpenWitnessModal: () => void;
   mapsApiKey: string;
+  dispatchCase?: SmartDispatchCase | null;
+  candidateTeams?: RescueTeamUnit[];
+  isCoordinating?: boolean;
+  onTriggerSmartDispatch?: () => void;
+  onConfirmArrival?: () => void;
+  onToggleTeamAvailability?: (teamId: string) => void;
+  onResetDispatch?: () => void;
 }
 
 export const MonitorView: React.FC<MonitorViewProps> = ({
@@ -98,6 +108,13 @@ export const MonitorView: React.FC<MonitorViewProps> = ({
   onTriggerEmergency,
   onOpenWitnessModal,
   mapsApiKey,
+  dispatchCase = null,
+  candidateTeams = [],
+  isCoordinating = false,
+  onTriggerSmartDispatch,
+  onConfirmArrival,
+  onToggleTeamAvailability,
+  onResetDispatch,
 }) => {
   const [isSimulatingCrash, setIsSimulatingCrash] = useState(false);
   const [decibels, setDecibels] = useState(64.2);
@@ -211,8 +228,8 @@ export const MonitorView: React.FC<MonitorViewProps> = ({
             </div>
             <span className="text-[10px] text-[#dfe2f1]/60 block truncate">
               {rescueConfig.forwardToAll1122Headquarters
-                ? 'Broadcast Active: All 5 1122 Regional Command HQs Linked'
-                : '1122 Local PSAP Only'}
+                ? 'Control Room Coordination: 1 Nearest Suitable Team (Others Stand Down)'
+                : '1122 Local PSAP 1-Team Dispatch'}
             </span>
           </div>
         </div>
@@ -443,6 +460,21 @@ export const MonitorView: React.FC<MonitorViewProps> = ({
         onCallHospital={(hosp) => onOpenServiceCall(hospitalToServiceTarget(hosp))}
         onCallDoctor={(doc) => onOpenServiceCall(doctorToServiceTarget(doc))}
       />
+
+      {/* Smart Dispatch & 1-Team Coordination Card */}
+      {onTriggerSmartDispatch && onConfirmArrival && onToggleTeamAvailability && (
+        <SmartDispatchCard
+          dispatchCase={dispatchCase}
+          candidateTeams={candidateTeams}
+          location={location}
+          contacts={contacts}
+          isCoordinating={isCoordinating}
+          onTriggerSmartDispatch={onTriggerSmartDispatch}
+          onConfirmArrival={onConfirmArrival}
+          onToggleTeamAvailability={onToggleTeamAvailability}
+          onResetDispatch={onResetDispatch}
+        />
+      )}
 
       {/* Live Area Detection + Nearest Doctors & Nearest Hospitals */}
       <NearbyDoctorsHospitalsSection

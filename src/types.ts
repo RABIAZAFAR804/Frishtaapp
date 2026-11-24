@@ -200,3 +200,90 @@ export interface SmartSensorState {
   lastEvaluatedAt: string;
 }
 
+export type TeamAvailabilityStatus = 'AVAILABLE' | 'BUSY';
+
+export type TeamDispatchStatus =
+  | 'STANDBY'
+  | 'ASSIGNED'
+  | 'STOOD_DOWN'
+  | 'BUSY_SKIPPED'
+  | 'ARRIVED';
+
+export type DispatchStage =
+  | 'STANDBY'
+  | 'ACCIDENT_DETECTED'
+  | 'CONTROL_ROOM_NOTIFIED'
+  | 'TEAM_DISPATCHED'
+  | 'OTHER_TEAMS_NOTIFIED'
+  | 'FAMILY_NOTIFIED'
+  | 'ARRIVED_ON_SCENE';
+
+export interface RescueTeamUnit {
+  id: string;
+  name: string;
+  agency: string;
+  controlRoom: string;
+  unitType: string;
+  capabilities: string[];
+  phone: string;
+  lat: number;
+  lng: number;
+  distanceKm: number;
+  distance: string;
+  etaMinutes: number;
+  eta: string;
+  availability: TeamAvailabilityStatus;
+  suitabilityScore: number;
+  dispatchStatus: TeamDispatchStatus;
+  notificationMessage?: string;
+}
+
+export interface FamilyDispatchNotification {
+  contactId: string;
+  name: string;
+  relation: string;
+  phone: string;
+  message: string;
+  sentAt: string;
+  arrivalNotified?: boolean;
+}
+
+export interface SmartDispatchStep {
+  key:
+    | 'accident_detected'
+    | 'services_notified'
+    | 'team_dispatched'
+    | 'other_teams_notified'
+    | 'family_notified'
+    | 'arrival_confirmed';
+  stepNumber: number;
+  title: string;
+  subtitle: string;
+  completed: boolean;
+  timestamp?: string;
+}
+
+export interface SmartDispatchCase {
+  incidentId: string;
+  stage: DispatchStage;
+  createdAt: string;
+  arrivedAt?: string;
+  arrivalConfirmed: boolean;
+  location: {
+    lat: number;
+    lng: number;
+    areaName: string;
+    city: string;
+  };
+  severityScore: number;
+  gForce: number;
+  controlRoomName: string;
+  targetHospitalName: string;
+  assignedTeam: RescueTeamUnit;
+  otherTeams: RescueTeamUnit[];
+  standDownMessage: string;
+  familyNotifications: FamilyDispatchNotification[];
+  steps: SmartDispatchStep[];
+}
+
+

@@ -6,6 +6,9 @@ import {
   DetectedLocation,
   NearbyDoctor,
   NearbyHospital,
+  EmergencyContact,
+  RescueTeamUnit,
+  SmartDispatchCase,
 } from '../types';
 import { EMERGENCY_SERVICES } from '../data/emergencyServices';
 import { soundEffects } from '../utils/audio';
@@ -14,16 +17,24 @@ import {
   doctorToServiceTarget,
   hospitalToServiceTarget,
 } from './NearbyDoctorsHospitalsSection';
+import { SmartDispatchCard } from './SmartDispatchCard';
 import { buildWhatsAppUrl, buildEmergencyWhatsAppMessage } from '../utils/whatsapp';
 import { WhatsAppIcon } from './WhatsAppIcon';
 
 interface ServicesHubViewProps {
   rescueConfig: RescueSystemConfig;
+  contacts?: EmergencyContact[];
   location?: DetectedLocation;
   doctors?: NearbyDoctor[];
   hospitals?: NearbyHospital[];
   isLoadingNearby?: boolean;
   selectedPresetId?: string;
+  dispatchCase?: SmartDispatchCase | null;
+  candidateTeams?: RescueTeamUnit[];
+  isCoordinating?: boolean;
+  onToggleTeamAvailability?: (teamId: string) => void;
+  onConfirmArrival?: () => void;
+  onResetDispatch?: () => void;
   onSelectPreset?: (id: string) => void;
   onRefreshGPS?: () => void;
   onSelectTargetHospital?: (hosp: NearbyHospital) => void;
@@ -35,11 +46,18 @@ interface ServicesHubViewProps {
 
 export const ServicesHubView: React.FC<ServicesHubViewProps> = ({
   rescueConfig,
+  contacts = [],
   location,
   doctors = [],
   hospitals = [],
   isLoadingNearby = false,
   selectedPresetId = 'gps',
+  dispatchCase = null,
+  candidateTeams = [],
+  isCoordinating = false,
+  onToggleTeamAvailability,
+  onConfirmArrival,
+  onResetDispatch,
   onSelectPreset,
   onRefreshGPS,
   onSelectTargetHospital,
@@ -98,14 +116,21 @@ export const ServicesHubView: React.FC<ServicesHubViewProps> = ({
 
           <button
             type="button"
+            disabled={isCoordinating}
             onClick={() => {
               soundEffects.playEmergencyBeep();
               onBroadcastAllServices();
             }}
             className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#ff334b] to-[#be0035] text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-[0_0_16px_rgba(255,51,75,0.4)] active:scale-95 transition-all shrink-0"
           >
-            <span className="material-symbols-outlined text-[16px] animate-pulse">campaign</span>
-            <span>Broadcast All Agencies</span>
+            <span className="material-symbols-outlined text-[16px] animate-pulse">route</span>
+            <span>
+              {isCoordinating
+                ? 'Assigning Nearest Suitable Team...'
+                : dispatchCase
+                ? 'Smart Dispatch (1 Team Assigned)'
+                : 'Smart Dispatch (1 Nearest Team)'}
+            </span>
           </button>
         </div>
       </div>
@@ -251,18 +276,18 @@ export const ServicesHubView: React.FC<ServicesHubViewProps> = ({
           </div>
         </div>
 
-        {/* Multi-HQ Forwarding Status Strip */}
-        <div className="pt-1 flex items-center justify-between text-[11px] text-[#dfe2f1]/80 border-t border-[#262a35]">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse" />
-            <span className="text-white font-medium">
+        {/* Control Room Single-Team Coordination Status Strip */}
+        <div className="pt-1 flex items-center justify-between gap-2 text-[11px] text-[#dfe2f1]/80 border-t border-[#262a35]">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-[#4edea3] animate-pulse shrink-0" />
+            <span className="text-white font-medium truncate">
               {rescueConfig.forwardToAll1122Headquarters
-                ? 'Forwarding Enabled to ALL 1122 Headquarters & Regional Desks'
-                : '1122 Local Station Dispatch Only'}
+                ? 'Control Room Coordination: 1 Nearest Suitable Team Assigned (Others Stand Down)'
+                : '1122 Local Station 1-Team Dispatch'}
             </span>
           </div>
-          <span className="text-[10px] text-[#4edea3] font-mono-num font-bold">
-            5 HQS LINKED
+          <span className="text-[10px] text-[#4edea3] font-mono-num font-bold shrink-0">
+            1-TEAM LOCK
           </span>
         </div>
       </div>
@@ -336,8 +361,22 @@ export const ServicesHubView: React.FC<ServicesHubViewProps> = ({
       </div>
         </div>
 
-        {/* RIGHT PANE (7 cols): Search, Filters & Emergency Facilities Directory */}
+        {/* RIGHT PANE (7 cols): Smart Dispatch Card + Search, Filters & Emergency Facilities Directory */}
         <div className="lg:col-span-7 space-y-4 min-w-0">
+          {location && onConfirmArrival && onToggleTeamAvailability && (
+            <SmartDispatchCard
+              dispatchCase={dispatchCase}
+              candidateTeams={candidateTeams}
+              location={location}
+              contacts={contacts}
+              isCoordinating={isCoordinating}
+              onTriggerSmartDispatch={onBroadcastAllServices}
+              onConfirmArrival={onConfirmArrival}
+              onToggleTeamAvailability={onToggleTeamAvailability}
+              onResetDispatch={onResetDispatch}
+            />
+          )}
+
       {/* Search Input Bar */}
       <div className="relative w-full">
         <span className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-[#dfe2f1]/50">
