@@ -1,0 +1,213 @@
+import React from 'react';
+import { TabType } from '../types';
+import { soundEffects } from '../utils/audio';
+import { PWAInstallButton } from './PWAInstallButton';
+
+interface HeaderProps {
+  activeTab: TabType;
+  onSelectTab: (tab: TabType) => void;
+  onTriggerSOS: () => void;
+  isAudioMuted: boolean;
+  onToggleMute: () => void;
+  isEmergencyActive?: boolean;
+  contactsCount?: number;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  activeTab,
+  onSelectTab,
+  onTriggerSOS,
+  isAudioMuted,
+  onToggleMute,
+  isEmergencyActive = false,
+  contactsCount = 0,
+}) => {
+  const getTabLabel = () => {
+    switch (activeTab) {
+      case 'monitor':
+        return 'Monitor';
+      case 'contacts':
+        return 'Lifelines & Contacts';
+      case 'emergency':
+        return 'Emergency';
+      case 'radar':
+        return 'Farishta Radar';
+      case 'services':
+        return 'Emergency Hub';
+      case 'medical':
+        return 'Medical Card';
+      case 'safety-hub':
+        return 'Safety Hub';
+    }
+  };
+
+  const navItems: { id: TabType; label: string; icon: string; badge?: string; urgent?: boolean }[] = [
+    { id: 'monitor', label: 'Monitor', icon: 'vital_signs' },
+    { id: 'contacts', label: 'Contacts', icon: 'contact_phone', badge: contactsCount > 0 ? String(contactsCount) : undefined },
+    { id: 'emergency', label: 'SOS', icon: 'crisis_alert', urgent: true, badge: isEmergencyActive ? 'LIVE' : undefined },
+    { id: 'radar', label: 'Radar', icon: 'radar' },
+    { id: 'services', label: 'Hub', icon: 'medical_information' },
+    { id: 'safety-hub', label: 'Safety', icon: 'menu_book' },
+    { id: 'medical', label: 'Medical', icon: 'medical_services' },
+  ];
+
+  const logoUrl =
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuAGU32pI6pjeJSz8HwZSw3ZAPAkRjae3TP8WacuSUfFEGJ9ImH22w0ZUc3-NYBzinQeocG8FROIjyf-Mp2DzLvmT8jikCeq3ox249BjZC14xMqTYYmG8RaYSflN8o3gJJP9lMMrO4nrXa7ZptQPfawVl_7D3F7mhtuVcWpyZNditaFmOJFJ4Ga1cgGM-9jd0uzxgNqT-wrTbWznaG2Q1lQiV_sNm7FoZKS8ZKXTqTRT1x5Ne1C7K9L_';
+
+  const profileUrl =
+    'https://lh3.googleusercontent.com/aida-public/AB6AXuCLpqaYLUVmhtJTy89n2TBLYVi2tbJzeVpxM3YFws-aJ1vEABM4wJMcub4QLlII07dlFUncpmJACWbXqVSSgZA96C9EeoPD9oTnmvAYrpU-vAM8ODOvAtPLFmPyBiuvY73IOIWaK7_21IrqrFH3XMXR3UpZXQ5I_GtWvW-JX3AaoHHd3MqABKv8itfNs0N8zRVd7mUPa_yR3KX9Jb0fnjE6jzSLx7DYLsANKI1DOzlYIOuO9Bmh5HKJ';
+
+  return (
+    <header className="fixed top-0 left-0 right-0 w-full z-50 pt-safe bg-[#0a0e18]/90 backdrop-blur-xl border-b border-[#262a35]/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)]">
+      <div className="max-w-7xl mx-auto h-18 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3">
+        {/* Left: Brand + Status */}
+        <div
+          onClick={() => onSelectTab('monitor')}
+          className="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group min-w-0 shrink-0"
+        >
+          <div className="relative shrink-0">
+            <img
+              src={logoUrl}
+              alt="FARISHTA App Logo"
+              className="h-8 w-8 sm:h-9 sm:w-9 object-contain drop-shadow-[0_0_8px_rgba(255,51,75,0.5)] group-hover:scale-105 transition-transform"
+              onError={(e) => {
+                (e.currentTarget as HTMLElement).style.display = 'none';
+              }}
+            />
+          </div>
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="font-display font-black text-base sm:text-lg tracking-tight text-white">
+                FARISHTA
+              </span>
+              <span className="hidden sm:inline text-[#313540] font-light">|</span>
+              <h1 className="hidden sm:block text-sm font-semibold text-[#dfe2f1]/90 truncate max-w-[140px] lg:hidden">
+                {getTabLabel()}
+              </h1>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4edea3] opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#4edea3]"></span>
+              </span>
+              <span className="text-[9px] sm:text-[10px] font-bold text-[#4edea3] uppercase tracking-wider font-mono-num truncate">
+                <span className="sm:hidden">50Hz Live</span>
+                <span className="hidden sm:inline">Active Guardian • 50Hz</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Center: Desktop Navigation Rail (lg+) */}
+        <nav
+          aria-label="Primary Desktop Navigation"
+          className="hidden lg:flex items-center gap-1 bg-[#141824]/90 border border-[#262a35] rounded-2xl p-1"
+        >
+          {navItems.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  soundEffects.playHapticClick();
+                  onSelectTab(item.id);
+                }}
+                className={`relative px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
+                  isActive
+                    ? item.urgent
+                      ? 'bg-[#ff334b]/20 text-[#ff5166] border border-[#ff334b]/40'
+                      : 'bg-[#00f1fd]/15 text-[#00f1fd] border border-[#00f1fd]/40'
+                    : 'text-[#dfe2f1]/70 hover:text-white hover:bg-[#1c1f2a]'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">{item.icon}</span>
+                <span>{item.label}</span>
+                {item.badge && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[9px] font-black font-mono-num ${
+                      item.urgent ? 'bg-[#ff334b] text-white animate-pulse' : 'bg-[#ff334b] text-white'
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right: PWA Install + Safety Hub (mobile/tablet) + Sound Toggle + Header SOS + Profile Avatar */}
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          <PWAInstallButton compact />
+
+          {/* Safety Hub & Blog Quick Button (shown below lg where desktop nav takes over) */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playHapticClick();
+              onSelectTab('safety-hub');
+            }}
+            aria-label="Safety Hub and First-Aid Guides"
+            className={`lg:hidden px-2 sm:px-2.5 py-1.5 rounded-full border text-xs font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
+              activeTab === 'safety-hub'
+                ? 'bg-[#00f1fd]/20 border-[#00f1fd] text-[#00f1fd] shadow-[0_0_12px_rgba(0,241,253,0.3)]'
+                : 'bg-[#1c1f2a] border-[#313540] text-[#dfe2f1]/80 hover:text-white hover:bg-[#252a38]'
+            }`}
+            title="Safety Hub & First-Aid Guides"
+          >
+            <span className="material-symbols-outlined text-[16px] sm:text-[17px]">menu_book</span>
+            <span className="hidden sm:inline">Guides</span>
+          </button>
+
+          {/* Sound Mute/Unmute */}
+          <button
+            type="button"
+            onClick={onToggleMute}
+            aria-label={isAudioMuted ? 'Unmute acoustic alarm' : 'Mute acoustic alarm'}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#1c1f2a] border border-[#313540] text-[#dfe2f1]/80 hover:text-white flex items-center justify-center transition-colors active:scale-95 shrink-0"
+            title={isAudioMuted ? 'Unmute alarm' : 'Mute alarm'}
+          >
+            <span className="material-symbols-outlined text-[17px] sm:text-[18px]">
+              {isAudioMuted ? 'volume_off' : 'volume_up'}
+            </span>
+          </button>
+
+          {/* Quick SOS Trigger in Header */}
+          <button
+            type="button"
+            onClick={() => {
+              soundEffects.playEmergencyBeep();
+              onTriggerSOS();
+            }}
+            className="min-h-[34px] sm:min-h-[38px] px-2.5 sm:px-3 rounded-full bg-gradient-to-r from-[#ff334b] to-[#be0035] text-white text-[11px] sm:text-xs font-black flex items-center gap-1 sm:gap-1.5 shadow-[0_0_16px_rgba(255,51,75,0.45)] hover:shadow-[0_0_24px_rgba(255,51,75,0.7)] active:scale-95 transition-all shrink-0"
+          >
+            <span className="material-symbols-outlined text-[15px] sm:text-[16px] animate-pulse">
+              e911_emergency
+            </span>
+            <span>SOS</span>
+          </button>
+
+          {/* Medical Profile Avatar */}
+          <button
+            type="button"
+            onClick={() => onSelectTab('medical')}
+            aria-label="View Medical Profile Card"
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full ring-2 ring-[#4edea3]/40 overflow-hidden hover:ring-[#4edea3] transition-all relative shrink-0 active:scale-95"
+          >
+            <img
+              src={profileUrl}
+              alt="Medical Card Profile"
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.src =
+                  'https://images.unsplash.com/photo-1594824813576-96b6e4e040f7?auto=format&fit=crop&w=120&q=80';
+              }}
+            />
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+};
